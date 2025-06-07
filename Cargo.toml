@@ -15,14 +15,14 @@ stm32f411 = ["dep:cortex-m", "dep:cortex-m-rt", "dep:stm32f4xx-hal", "dep:rtic",
 
 [dependencies]
 embedded-hal = "1.0"
-panic-halt = "0.2"
+panic-halt = "1.0.0"
 
 # STM32F411 dependencies
-cortex-m = { version = "0.7", optional = true }
-cortex-m-rt = { version = "0.7", optional = true }
-stm32f4xx-hal = { version = "0.21", features = ["stm32f411"], optional = true }
-rtic = { version = "2.1", features = ["thumbv7-backend"], optional = true }
-rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"], optional = true }
+cortex-m = { version = "0.7.7", optional = true }
+cortex-m-rt = { version = "0.7.5", optional = true }
+stm32f4xx-hal = { version = "0.22.1", features = ["stm32f411"], optional = true }
+rtic = { version = "2.1.2", features = ["thumbv7-backend"], optional = true }
+rtic-monotonics = { version = "2.0.3", features = ["cortex-m-systick"], optional = true }
 
 # Core traits for no_std derive support
 nb = "1.1"
