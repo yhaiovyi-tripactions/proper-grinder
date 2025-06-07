@@ -1,11 +1,11 @@
 //! STM32F411 LED Blinker with Button Control
-//! 
+//!
 //! This firmware demonstrates:
 //! - RTIC 2.1 async tasks
 //! - Software button debouncing with generic timer support
 //! - LED control via button toggle
 //! - STM32F411CEU6 running at 100MHz
-//! 
+//!
 //! Hardware:
 //! - LED on PC13 (active LOW)
 //! - Button on PB2 (active HIGH with pullup)
@@ -19,18 +19,18 @@ use rtic_monotonics::systick::prelude::*;
 // Create the monotonic timer
 systick_monotonic!(Mono, 1_000);
 
-// Import our generic button debounce module  
+// Import our generic button debounce module
 mod button;
-use button::{DebouncedButton, ButtonEvent};
+use button::{ButtonEvent, DebouncedButton};
 
 #[rtic::app(device = stm32f4xx_hal::pac, peripherals = true, dispatchers = [TIM2, TIM3])]
 mod app {
     use super::*;
+    use rtic_monotonics::Monotonic;
     use stm32f4xx_hal::{
-        gpio::{Input, Output, PushPull, PC13, PB2},
+        gpio::{Input, Output, PushPull, PB2, PC13},
         prelude::*,
     };
-    use rtic_monotonics::Monotonic;
 
     #[shared]
     struct Shared {
@@ -58,10 +58,10 @@ mod app {
         // GPIO setup
         let gpioc = dp.GPIOC.split();
         let gpiob = dp.GPIOB.split();
-        
+
         // LED on PC13 (active LOW - on when pin is LOW)
         let led = gpioc.pc13.into_push_pull_output();
-        
+
         // Button on PB2 (active HIGH with internal pullup)
         let button_pin = gpiob.pb2.into_pull_up_input();
         let button = DebouncedButton::new_active_high(button_pin, 20);
@@ -70,10 +70,7 @@ mod app {
         blink_task::spawn().ok();
         button_task::spawn().ok();
 
-        (
-            Shared { led_on: false },
-            Local { led, button }
-        )
+        (Shared { led_on: false }, Local { led, button })
     }
 
     /// LED blinking task - blinks when enabled, stays off when disabled
@@ -81,10 +78,10 @@ mod app {
     async fn blink_task(mut ctx: blink_task::Context) {
         loop {
             let should_blink = ctx.shared.led_on.lock(|led_on| *led_on);
-            
+
             if should_blink {
                 // Blink pattern: 100ms on, 100ms off
-                ctx.local.led.set_low();  // LED on (active LOW)
+                ctx.local.led.set_low(); // LED on (active LOW)
                 Mono::delay(100.millis()).await;
                 ctx.local.led.set_high(); // LED off (active LOW)
                 Mono::delay(100.millis()).await;
@@ -114,7 +111,7 @@ mod app {
                     }
                 }
             }
-            
+
             // Poll button every 10ms
             Mono::delay(10.millis()).await;
         }
