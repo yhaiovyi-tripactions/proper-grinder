@@ -1,0 +1,13 @@
+# Default target for STM32F411
+[build]
+target = "thumbv7em-none-eabihf"
+
+# STM32F411 configuration (ARM Cortex-M4)
+[target.thumbv7em-none-eabihf]
+runner = "probe-rs run --chip STM32F411CEUx"
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+]
+
+[env]
+DEFMT_LOG = "trace"

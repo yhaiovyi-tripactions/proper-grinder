@@ -1,0 +1,30 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Embedded development
+*.bin
+*.hex
+*.elf
+*.map
+*.list
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Embedded tools
+.probe-rs/
+openocd.log
+.gdb_history
+
+# Rust analyzer
+rust-project.json 

@@ -1,0 +1,33 @@
+[package]
+name = "stm32f411-blinker"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["stm32f411"]
+stm32f411 = ["dep:cortex-m", "dep:cortex-m-rt", "dep:stm32f4xx-hal", "dep:rtic", "dep:rtic-monotonics"]
+# Future platforms can be added here easily:
+# esp32c3 = ["dep:esp32c3-hal", "dep:embassy-time"]
+# rp2040 = ["dep:rp2040-hal", "dep:rtic"]
+# stm32f103 = ["dep:stm32f1xx-hal", "dep:rtic"]
+
+[dependencies]
+embedded-hal = "1.0"
+panic-halt = "0.2"
+
+# STM32F411 dependencies
+cortex-m = { version = "0.7", optional = true }
+cortex-m-rt = { version = "0.7", optional = true }
+stm32f4xx-hal = { version = "0.21", features = ["stm32f411"], optional = true }
+rtic = { version = "2.1", features = ["thumbv7-backend"], optional = true }
+rtic-monotonics = { version = "2.0", features = ["cortex-m-systick"], optional = true }
+
+# Core traits for no_std derive support
+nb = "1.1"
+
+[profile.release]
+codegen-units = 1
+debug = true
+lto = true
