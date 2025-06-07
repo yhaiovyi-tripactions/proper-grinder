@@ -1,0 +1,66 @@
+# Cursor AI Code Editor Configuration
+
+## Project Context
+
+This is an **RTIC (Real-Time Interrupt-driven Concurrency)** embedded systems project for STM32F411 microcontrollers. 
+
+### Critical Requirements:
+- **ALL functionality is time-sensitive** - timing precision is crucial
+- **Real-time constraints** - code must execute within strict deadlines
+- **Interrupt-driven architecture** - tasks are triggered by hardware events
+- **No_std environment** - standard library is not available
+- **Resource sharing** - shared resources must be protected from race conditions
+- **Deterministic behavior** - code execution must be predictable and consistent
+
+### RTIC-Specific Guidelines:
+- Tasks should be lightweight and complete quickly
+- Avoid blocking operations in high-priority tasks
+- Use async/await for delays and time-based operations
+- Shared resources must use proper locking mechanisms
+- Consider interrupt priorities and task scheduling
+- Test timing-critical code thoroughly on target hardware
+
+## Commit Message Guidelines
+
+All commit messages MUST follow the Conventional Commits specification:
+
+### Format
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Types (REQUIRED):
+- **feat**: A new feature
+- **fix**: A bug fix  
+- **docs**: Documentation only changes
+- **style**: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+- **refactor**: A code change that neither fixes a bug nor adds a feature
+- **perf**: A code change that improves performance
+- **test**: Adding missing tests or correcting existing tests
+- **chore**: Changes to the build process or auxiliary tools and libraries such as documentation generation
+
+### Examples:
+```
+feat: add button debouncing support
+fix: resolve LED timing issue  
+docs: update README with hardware setup
+refactor: remove dead code from button module
+chore: update dependencies to latest versions
+```
+
+### Rules:
+1. Use lowercase for type and description
+2. No period at the end of the description
+3. Keep description under 50 characters when possible
+4. Use imperative mood ("add feature" not "added feature")
+5. Include scope when appropriate (e.g., "feat(button): add debouncing")
+
+## Code Style
+- Follow Rust standard formatting with `cargo fmt`
+- Run `cargo clippy` before committing
+- Remove dead code and unused dependencies
+- Write meaningful variable and function names 

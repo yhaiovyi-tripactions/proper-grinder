@@ -25,7 +25,6 @@ rtic = { version = "2.1.2", features = ["thumbv7-backend"], optional = true }
 rtic-monotonics = { version = "2.0.3", features = ["cortex-m-systick"], optional = true }
 
 # Core traits for no_std derive support
-nb = "1.1"
 
 [profile.release]
 codegen-units = 1

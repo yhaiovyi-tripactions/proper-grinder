@@ -24,8 +24,6 @@
 //! }
 //! ```
 
-extern crate core;
-
 use core::{
     option::Option::{self, Some, None},
     result::Result::{Ok, Err},
@@ -147,9 +145,7 @@ where
             Ok(high) => {
                 if self.active_low {
                     if high { ButtonState::Released } else { ButtonState::Pressed }
-                } else {
-                    if high { ButtonState::Pressed } else { ButtonState::Released }
-                }
+                } else if high { ButtonState::Pressed } else { ButtonState::Released }
             }
             Err(_) => self.last_state,
         }
@@ -187,45 +183,4 @@ where
         self.last_state = current_raw;
         None
     }
-
-    /// Get current stable button state
-    pub fn state(&self) -> ButtonState {
-        self.stable_state
-    }
-
-    /// Check if button is currently pressed
-    pub fn is_pressed(&self) -> bool {
-        self.stable_state == ButtonState::Pressed
-    }
-
-    /// Check if button is currently released
-    pub fn is_released(&self) -> bool {
-        self.stable_state == ButtonState::Released
-    }
-}
-
-/// Convenience macro for creating button tasks that work with any monotonic
-#[macro_export]
-macro_rules! button_task {
-    ($task_name:ident, $button:ident, $mono:ty, $poll_interval_ms:expr) => {
-        #[rtic::task(local = [$button])]
-        async fn $task_name(ctx: $task_name::Context) {
-            loop {
-                if let Some(event) = ctx.local.$button.check_event::<$mono>().await {
-                    match event {
-                        $crate::button::ButtonEvent::Press => {
-                            // Handle button press
-                        }
-                        $crate::button::ButtonEvent::Release => {
-                            // Handle button release
-                        }
-                    }
-                }
-                
-                // Generic delay
-                let delay = <$mono>::Duration::from(fugit::MillisDurationU32::millis($poll_interval_ms));
-                <$mono>::delay(delay).await;
-            }
-        }
-    };
 } 
