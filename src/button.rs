@@ -1,195 +1,177 @@
-//! Generic Software Button Debounce Module
+//! Interrupt-Driven Button Handler with Debouncing
 //!
-//! This module provides a platform-agnostic button debouncer that works with any GPIO pin
-//! implementing `embedded-hal::digital::InputPin` and any RTIC monotonic timer.
+//! This module provides a truly interrupt-driven button handler using EXTI interrupts
+//! combined with timer-based debouncing. No polling loops in main tasks.
 //!
 //! # Features
-//! - Software debouncing with configurable timeout
+//! - Hardware interrupt-driven (EXTI) for immediate response
+//! - Timer-based debouncing to eliminate button bounce
+//! - Async channel communication between ISR and tasks
 //! - Support for both active-HIGH and active-LOW buttons
-//! - Generic over GPIO pin types and monotonic timers
-//! - Async/await support with RTIC 2.x
-//! - Event-driven API (Press/Release events)
+//! - Zero CPU overhead when button not pressed
 //!
-//! # Example
-//! ```rust,no_run
-//! let button_pin = gpiob.pb2.into_pull_up_input();
-//! let mut button = DebouncedButton::new_active_high(button_pin, 20);
-//!
-//! // In an async task:
-//! if let Some(event) = button.check_event::<Mono>().await {
-//!     match event {
-//!         ButtonEvent::Press => println!("Button pressed!"),
-//!         ButtonEvent::Release => println!("Button released!"),
-//!     }
-//! }
-//! ```
+//! # Architecture
+//! 1. GPIO pin configured for EXTI interrupt on both edges
+//! 2. Interrupt handler starts debounce timer and records raw state
+//! 3. Timer callback checks if state is stable and sends final event
+//! 4. Async task receives only stable, debounced events
 
 use core::{
     clone::Clone,
     cmp::{Eq, PartialEq},
-    convert::From,
     fmt::Debug,
     marker::Copy,
-    option::Option::{self, None, Some},
-    result::Result::{Err, Ok},
 };
-use embedded_hal::digital::InputPin;
-use rtic_monotonics::fugit;
-use rtic_monotonics::Monotonic;
-
-/// Button debounce states
-pub enum ButtonState {
-    /// Button is not pressed
-    Released,
-    /// Button is pressed  
-    Pressed,
-}
-
-impl PartialEq for ButtonState {
-    fn eq(&self, other: &Self) -> bool {
-        core::mem::discriminant(self) == core::mem::discriminant(other)
-    }
-}
-
-impl Eq for ButtonState {}
-
-impl Clone for ButtonState {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Copy for ButtonState {}
-
-impl Debug for ButtonState {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            ButtonState::Released => f.write_str("Released"),
-            ButtonState::Pressed => f.write_str("Pressed"),
-        }
-    }
-}
 
 /// Button events after debouncing
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonEvent {
-    /// Button was just pressed (transition from Released to Pressed)
+    /// Button was pressed (stable transition to pressed state)
     Press,
-    /// Button was just released (transition from Pressed to Released)
+    /// Button was released (stable transition to released state)
     Release,
 }
 
-impl PartialEq for ButtonEvent {
-    fn eq(&self, other: &Self) -> bool {
-        core::mem::discriminant(self) == core::mem::discriminant(other)
-    }
+/// Button states for debouncing
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonState {
+    /// Button is not pressed
+    Released,
+    /// Button is pressed
+    Pressed,
 }
 
-impl Eq for ButtonEvent {}
-
-impl Clone for ButtonEvent {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl Copy for ButtonEvent {}
-
-impl Debug for ButtonEvent {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            ButtonEvent::Press => f.write_str("Press"),
-            ButtonEvent::Release => f.write_str("Release"),
-        }
-    }
-}
-
-/// Software button debouncer with RTIC async support
-/// Generic over both PIN type and MONOTONIC timer
-pub struct DebouncedButton<PIN> {
-    pin: PIN,
-    last_state: ButtonState,
+/// Interrupt-driven button with timer-based debouncing
+/// 
+/// This handles the complete debouncing flow:
+/// 1. EXTI interrupt detects any edge
+/// 2. Debounce timer starts
+/// 3. After debounce delay, final state is checked and event sent
+pub struct InterruptButton {
+    /// Current stable state of the button
     stable_state: ButtonState,
-    debounce_time_ms: u32,
+    /// State recorded during last interrupt
+    pending_state: ButtonState,
+    /// Whether button is active low (pullup) or active high (pulldown)
     active_low: bool,
+    /// Debounce time in milliseconds
+    debounce_time_ms: u32,
+    /// Whether debounce timer is currently running
+    debounce_pending: bool,
 }
 
-impl<PIN> DebouncedButton<PIN>
-where
-    PIN: InputPin,
-{
-    /// Create a new debounced button (active low - pullup resistor)
-    pub fn new(pin: PIN, debounce_time_ms: u32) -> Self {
+impl InterruptButton {
+    /// Create new interrupt button for active-low (pullup resistor) configuration
+    pub fn new_active_low(debounce_time_ms: u32) -> Self {
         Self {
-            pin,
-            last_state: ButtonState::Released,
             stable_state: ButtonState::Released,
-            debounce_time_ms,
+            pending_state: ButtonState::Released,
             active_low: true,
-        }
-    }
-
-    /// Create a new debounced button (active high - pulldown resistor)
-    pub fn new_active_high(pin: PIN, debounce_time_ms: u32) -> Self {
-        Self {
-            pin,
-            last_state: ButtonState::Released,
-            stable_state: ButtonState::Released,
             debounce_time_ms,
+            debounce_pending: false,
+        }
+    }
+
+    /// Create new interrupt button for active-high (pulldown resistor) configuration  
+    pub fn new_active_high(debounce_time_ms: u32) -> Self {
+        Self {
+            stable_state: ButtonState::Released,
+            pending_state: ButtonState::Released,
             active_low: false,
+            debounce_time_ms,
+            debounce_pending: false,
         }
     }
 
-    /// Read the current raw button state
-    fn read_raw_state(&mut self) -> ButtonState {
-        match self.pin.is_high() {
-            Ok(high) => {
-                if self.active_low {
-                    if high {
-                        ButtonState::Released
-                    } else {
-                        ButtonState::Pressed
-                    }
-                } else if high {
-                    ButtonState::Pressed
-                } else {
-                    ButtonState::Released
-                }
+    /// Convert raw GPIO pin state to logical button state
+    fn pin_to_button_state(&self, pin_high: bool) -> ButtonState {
+        if self.active_low {
+            if pin_high {
+                ButtonState::Released
+            } else {
+                ButtonState::Pressed
             }
-            Err(_) => self.last_state,
+        } else if pin_high {
+            ButtonState::Pressed
+        } else {
+            ButtonState::Released
         }
     }
 
-    /// Check for button events with debouncing
-    /// Generic over any RTIC monotonic timer
-    pub async fn check_event<MONO>(&mut self) -> Option<ButtonEvent>
-    where
-        MONO: Monotonic,
-        MONO::Duration: From<fugit::MillisDurationU32>,
-    {
-        let current_raw = self.read_raw_state();
-
-        if current_raw != self.last_state {
-            self.last_state = current_raw;
-
-            // Generic delay that works with any monotonic
-            let delay =
-                MONO::Duration::from(fugit::MillisDurationU32::millis(self.debounce_time_ms));
-            MONO::delay(delay).await;
-
-            let debounced_state = self.read_raw_state();
-
-            if debounced_state == current_raw && debounced_state != self.stable_state {
-                let event = match debounced_state {
-                    ButtonState::Pressed => Some(ButtonEvent::Press),
-                    ButtonState::Released => Some(ButtonEvent::Release),
-                };
-
-                self.stable_state = debounced_state;
-                return event;
-            }
+    /// Handle GPIO interrupt - should be called from EXTI interrupt handler
+    /// 
+    /// Returns true if debounce timer should be started
+    pub fn handle_interrupt(&mut self, pin_high: bool) -> bool {
+        let new_state = self.pin_to_button_state(pin_high);
+        
+        // Only start debounce if state changed and we're not already debouncing
+        if new_state != self.stable_state && !self.debounce_pending {
+            self.pending_state = new_state;
+            self.debounce_pending = true;
+            true // Start debounce timer
+        } else {
+            false // Ignore spurious interrupts during debounce
         }
+    }
 
-        self.last_state = current_raw;
-        None
+    /// Handle debounce timer completion
+    /// 
+    /// Should be called when debounce timer expires.
+    /// Returns Some(event) if button state change is confirmed.
+    pub fn handle_debounce_complete(&mut self, current_pin_high: bool) -> Option<ButtonEvent> {
+        self.debounce_pending = false;
+        
+        let current_state = self.pin_to_button_state(current_pin_high);
+        
+        // Check if state is stable (matches what we saw during interrupt)
+        if current_state == self.pending_state && current_state != self.stable_state {
+            let event = match current_state {
+                ButtonState::Pressed => ButtonEvent::Press,
+                ButtonState::Released => ButtonEvent::Release,
+            };
+            
+            self.stable_state = current_state;
+            Some(event)
+        } else {
+            // State changed during debounce - ignore this transition
+            None
+        }
+    }
+
+    /// Get debounce time in milliseconds
+    pub fn debounce_time_ms(&self) -> u32 {
+        self.debounce_time_ms
+    }
+
+    /// Check if debounce timer is currently running
+    pub fn is_debounce_pending(&self) -> bool {
+        self.debounce_pending
+    }
+
+    /// Get current stable button state
+    pub fn stable_state(&self) -> ButtonState {
+        self.stable_state
     }
 }
+
+/// Helper function to send button events from interrupt context
+/// 
+/// This should be called from the EXTI interrupt handler
+pub fn send_button_event(event: ButtonEvent) -> Result<(), ButtonEvent> {
+    // This will be implemented in main.rs using the specific channel
+    // The interrupt handler will call this function
+    Err(event) // Placeholder - actual implementation in main.rs
+}
+
+/// Helper trait for GPIO pins that can be used as interrupt sources
+pub trait InterruptPin {
+    /// Configure the pin as an interrupt source
+    fn setup_interrupt(&mut self);
+    
+    /// Clear pending interrupt flag
+    fn clear_interrupt(&mut self);
+    
+    /// Check if this pin caused the interrupt
+    fn check_interrupt(&self) -> bool;
+}
+
