@@ -5,6 +5,7 @@
 //! - Software button debouncing with generic timer support
 //! - LED control via button toggle
 //! - STM32F411CEU6 running at 100MHz
+//! - Centralized pin configuration
 //!
 //! Hardware:
 //! - LED on PC13 (active LOW)
@@ -19,16 +20,19 @@ use rtic_monotonics::systick::prelude::*;
 // Create the monotonic timer
 systick_monotonic!(Mono, 1_000);
 
-// Import our generic button debounce module
+// Import modules
 mod button;
+mod pin_config;
+
 use button::{ButtonEvent, DebouncedButton};
+use pin_config::{timing::*, init_pins, LedPin};
 
 #[rtic::app(device = stm32f4xx_hal::pac, peripherals = true, dispatchers = [TIM2, TIM3])]
 mod app {
     use super::*;
     use rtic_monotonics::Monotonic;
     use stm32f4xx_hal::{
-        gpio::{Input, Output, PushPull, PB2, PC13},
+        gpio::Input,
         prelude::*,
     };
 
@@ -41,9 +45,9 @@ mod app {
     #[local]
     struct Local {
         /// LED pin (PC13, active LOW)
-        led: PC13<Output<PushPull>>,
+        led: LedPin,
         /// Debounced button handler
-        button: DebouncedButton<PB2<Input>>,
+        button: DebouncedButton<pin_config::ButtonPin>,
     }
 
     #[init]
@@ -59,12 +63,9 @@ mod app {
         let gpioc = dp.GPIOC.split();
         let gpiob = dp.GPIOB.split();
 
-        // LED on PC13 (active LOW - on when pin is LOW)
-        let led = gpioc.pc13.into_push_pull_output();
-
-        // Button on PB2 (active HIGH with internal pullup)
-        let button_pin = gpiob.pb2.into_pull_up_input();
-        let button = DebouncedButton::new_active_high(button_pin, 20);
+        // Initialize pins using pin config
+        let (led, button_pin) = init_pins(gpiob, gpioc);
+        let button = DebouncedButton::new_active_high(button_pin, BUTTON_DEBOUNCE_MS);
 
         // Start async tasks
         blink_task::spawn().ok();
@@ -97,7 +98,7 @@ mod app {
     #[task(local = [button], shared = [led_on])]
     async fn button_task(mut ctx: button_task::Context) {
         loop {
-            // Check for button events with 20ms debouncing
+            // Check for button events with debouncing
             if let Some(event) = ctx.local.button.check_event::<Mono>().await {
                 match event {
                     ButtonEvent::Press => {
@@ -112,7 +113,7 @@ mod app {
                 }
             }
 
-            // Poll button every 10ms
+            // Poll button every 10ms (this was in the working version)
             Mono::delay(10.millis()).await;
         }
     }
