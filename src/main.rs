@@ -26,7 +26,12 @@ mod button;
 mod config;
 
 use button::{ButtonEvent, InterruptButton, ButtonAction, handle_button_interrupt, handle_button_debounce, handle_button_event};
-use config::{timing::*, init_pins, LedPin};
+use config::{
+    timing::*, 
+    clocks::{SYSCLK_HZ, APB1_HZ, APB2_HZ}, 
+    init_pins, 
+    LedPin
+};
 
 use stm32f4xx_hal::{
     prelude::*,
@@ -60,9 +65,13 @@ mod app {
     fn init(ctx: init::Context) -> (Shared, Local) {
         let dp = ctx.device;
 
-        // Clock setup - 100MHz operation
+        // Clock setup using configuration constants
         let rcc = dp.RCC.constrain();
-        let clocks = rcc.cfgr.sysclk(100_000_000.Hz()).freeze();
+        let clocks = rcc.cfgr
+            .sysclk(SYSCLK_HZ.Hz())
+            .pclk1(APB1_HZ.Hz())
+            .pclk2(APB2_HZ.Hz())
+            .freeze();
         Mono::start(ctx.core.SYST, clocks.sysclk().raw());
 
         // GPIO setup
@@ -72,13 +81,21 @@ mod app {
         // Initialize pins using pin config
         let (led, mut button_pin) = init_pins(gpiob, gpioc);
 
-        // Set up EXTI interrupt for button (PB2 = EXTI2) on both edges
+        // Set up EXTI interrupt for button - interrupt line determined from pin
         let mut syscfg = dp.SYSCFG.constrain();
         let mut exti = dp.EXTI;
         
         button_pin.make_interrupt_source(&mut syscfg);
         button_pin.enable_interrupt(&mut exti);
         button_pin.trigger_on_edge(&mut exti, Edge::RisingFalling);
+
+        // Get interrupt line from pin dynamically (for PB2 this returns EXTI2)
+        let button_interrupt = button_pin.interrupt();
+        
+        // Enable the interrupt in NVIC using the pin's interrupt method
+        unsafe {
+            cortex_m::peripheral::NVIC::unmask(button_interrupt);
+        }
 
         // Initialize button handler
         let button_handler = InterruptButton::new_active_high(BUTTON_DEBOUNCE_MS);
@@ -98,7 +115,7 @@ mod app {
         )
     }
 
-    /// EXTI interrupt handler for button (PB2 -> EXTI2)
+    /// EXTI interrupt handler for button (PB2 -> EXTI2 from config)
     /// Uses button module to handle all button logic
     #[task(binds = EXTI2, shared = [button_pin, button_handler])]
     fn button_interrupt(mut ctx: button_interrupt::Context) {
@@ -147,7 +164,7 @@ mod app {
             let should_blink = ctx.shared.led_on.lock(|led_on| *led_on);
 
             if should_blink {
-                // Blink pattern: configurable timing
+                // Blink pattern using configured timing
                 ctx.local.led.set_low(); // LED on (active LOW)
                 Mono::delay(LED_BLINK_ON_TIME_MS.millis()).await;
                 ctx.local.led.set_high(); // LED off (active LOW)
