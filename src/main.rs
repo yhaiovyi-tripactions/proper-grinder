@@ -23,13 +23,12 @@ systick_monotonic!(Mono, 1_000);
 
 // Import modules
 mod button;
-mod pin_config;
+mod config;
 
 use button::{ButtonEvent, InterruptButton, ButtonAction, handle_button_interrupt, handle_button_debounce, handle_button_event};
-use pin_config::{timing::*, init_pins, LedPin};
+use config::{timing::*, init_pins, LedPin};
 
 use stm32f4xx_hal::{
-    gpio::{Edge, ExtiPin},
     prelude::*,
 };
 
@@ -39,7 +38,6 @@ mod app {
     use rtic_monotonics::Monotonic;
     use stm32f4xx_hal::{
         gpio::{Edge, ExtiPin},
-        prelude::*,
     };
 
     #[shared]
@@ -47,7 +45,7 @@ mod app {
         /// LED blinking state (on/off)
         led_on: bool,
         /// Button pin with EXTI capability (shared between interrupt and debounce task)
-        button_pin: pin_config::ButtonPin,
+        button_pin: config::ButtonPin,
         /// Button handler for debouncing logic
         button_handler: InterruptButton,
     }
@@ -170,7 +168,7 @@ mod app {
         
         // Execute the action
         match action {
-            ButtonAction::ToggleLed => {
+            ButtonAction::Toggle => {
                 ctx.shared.led_on.lock(|led_on| {
                     *led_on = !*led_on;
                 });

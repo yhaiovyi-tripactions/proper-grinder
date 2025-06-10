@@ -29,10 +29,36 @@ This is an **RTIC (Real-Time Interrupt-driven Concurrency)** embedded systems pr
 - **MUST** be event-driven with zero polling loops in main logic
 - **MUST** expose clean, modular API for integration with main application
 - **MUST** support both active-high and active-low button configurations
+- **MUST** remain hardware and application agnostic - no assumptions about what is being controlled
 - **SHOULD** provide configurable debounce timing
-- **SHOULD** return structured events (Press/Release) and actions (ToggleLed/None)
+- **SHOULD** return structured events (Press/Release) and actions (Toggle/None)
+- **SHOULD** use generic action names (Toggle, not ToggleLed; Action, not LedAction)
 - **AVOID** blocking operations or long-running code in interrupt context
 - **AVOID** direct hardware dependencies - accept pin states as parameters
+- **AVOID** hardcoding specific implementation details (LED, motor, etc.) in action names
+- **AVOID** assuming what the button controls - keep actions generic and extensible
+
+### src/config.rs
+- **MUST** centralize all hardware-specific configuration parameters
+- **MUST** provide compile-time constants for timing parameters (debounce, blink rates, delays)
+- **MUST** define pin assignments and GPIO configurations in a structured, type-safe manner
+- **MUST** specify interrupt mappings (EXTI lines, interrupt numbers, priorities)
+- **MUST** include clock configuration parameters (system clock, peripheral clocks)
+- **MUST** organize configuration by functional modules (pins, timing, interrupts, clocks)
+- **MUST** use descriptive, self-documenting constant names with units (MS, HZ suffixes)
+- **MUST** provide comprehensive documentation for each configuration parameter
+- **MUST** be hardware-specific but platform-agnostic (easy to port to other STM32 variants)
+- **SHOULD** group related constants into logical modules or structs
+- **SHOULD** provide alternative configurations for different hardware revisions
+- **SHOULD** include validation ranges or constraints in documentation
+- **SHOULD** export pin initialization functions that return properly configured pins
+- **SHOULD** define interrupt priority levels based on real-time requirements
+- **SHOULD** provide timing constants that work well with RTIC's systick monotonic
+- **AVOID** magic numbers scattered throughout the codebase
+- **AVOID** hardcoding hardware details in main application logic
+- **AVOID** coupling configuration to specific HAL implementations where possible
+- **AVOID** overly complex configuration that makes the code hard to understand
+- **AVOID** configuration parameters that change at runtime (prefer compile-time constants)
 
 ## Commit Message Guidelines
 
