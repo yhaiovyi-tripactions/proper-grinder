@@ -17,7 +17,6 @@ stm32f411 = ["dep:cortex-m", "dep:cortex-m-rt", "dep:stm32f4xx-hal", "dep:rtic",
 embedded-hal = "1.0"
 panic-halt = "1.0.0"
 heapless = "0.8"
-rtt-target = "0.5.0"
 
 # STM32F411 dependencies
 cortex-m = { version = "0.7.7", optional = true }

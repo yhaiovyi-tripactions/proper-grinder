@@ -154,24 +154,51 @@ impl InterruptButton {
     }
 }
 
-/// Helper function to send button events from interrupt context
+/// High-level button interrupt handler
 /// 
-/// This should be called from the EXTI interrupt handler
-pub fn send_button_event(event: ButtonEvent) -> Result<(), ButtonEvent> {
-    // This will be implemented in main.rs using the specific channel
-    // The interrupt handler will call this function
-    Err(event) // Placeholder - actual implementation in main.rs
+/// Call this from your EXTI interrupt handler - it handles all the button logic
+/// and returns whether a debounce task should be spawned.
+pub fn handle_button_interrupt(
+    button_handler: &mut InterruptButton,
+    pin_high: bool,
+) -> Option<bool> {
+    // Check if we should start debouncing
+    if button_handler.handle_interrupt(pin_high) {
+        Some(pin_high) // Return pin state for debounce task
+    } else {
+        None
+    }
 }
 
-/// Helper trait for GPIO pins that can be used as interrupt sources
-pub trait InterruptPin {
-    /// Configure the pin as an interrupt source
-    fn setup_interrupt(&mut self);
-    
-    /// Clear pending interrupt flag
-    fn clear_interrupt(&mut self);
-    
-    /// Check if this pin caused the interrupt
-    fn check_interrupt(&self) -> bool;
+/// High-level button debounce handler
+/// 
+/// Call this from your debounce task after the debounce delay.
+/// Returns the final button event if state is stable.
+pub fn handle_button_debounce(
+    button_handler: &mut InterruptButton,
+    current_pin_high: bool,
+    _interrupt_pin_state: bool,
+) -> Option<ButtonEvent> {
+    // Check if state is stable and generate event
+    button_handler.handle_debounce_complete(current_pin_high)
+}
+
+/// High-level button event handler
+/// 
+/// Call this when you receive a button event to handle the action.
+pub fn handle_button_event(event: ButtonEvent) -> ButtonAction {
+    match event {
+        ButtonEvent::Press => ButtonAction::ToggleLed,
+        ButtonEvent::Release => ButtonAction::None,
+    }
+}
+
+/// Actions that can result from button events
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonAction {
+    /// Toggle LED blinking state
+    ToggleLed,
+    /// No action required
+    None,
 }
 
