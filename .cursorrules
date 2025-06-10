@@ -20,6 +20,20 @@ This is an **RTIC (Real-Time Interrupt-driven Concurrency)** embedded systems pr
 - Consider interrupt priorities and task scheduling
 - Test timing-critical code thoroughly on target hardware
 
+## Module-Specific Guidelines
+
+### src/button.rs
+- **MUST** implement reusable, interrupt-driven button click handling
+- **MUST** include software debouncing to eliminate mechanical switch bounce
+- **MUST** provide first-party RTIC support with proper resource sharing
+- **MUST** be event-driven with zero polling loops in main logic
+- **MUST** expose clean, modular API for integration with main application
+- **MUST** support both active-high and active-low button configurations
+- **SHOULD** provide configurable debounce timing
+- **SHOULD** return structured events (Press/Release) and actions (ToggleLed/None)
+- **AVOID** blocking operations or long-running code in interrupt context
+- **AVOID** direct hardware dependencies - accept pin states as parameters
+
 ## Commit Message Guidelines
 
 All commit messages MUST follow the Conventional Commits specification:
