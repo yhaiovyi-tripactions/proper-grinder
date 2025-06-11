@@ -2,11 +2,11 @@
 [build]
 target = "thumbv7em-none-eabihf"
 
-# STM32F411 configuration (ARM Cortex-M4)
+# STM32F411 configuration (ARM Cortex-M4) - Debug-friendly setup
 [target.thumbv7em-none-eabihf]
 runner = "probe-rs run --chip STM32F411CEUx"
 rustflags = [
-  "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=--nmagic",
 ]
 
 [env]
